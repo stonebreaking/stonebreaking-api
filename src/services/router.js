@@ -21,119 +21,41 @@ let anthropicProvider = null;
 let googleProvider = null;
 
 // ═══════════════════════════════════════════════════════════
-// MODEL REGISTRY — All models with cost + quality data
+// MODEL REGISTRY — DeepSeek as primary (cheapest + best)
+// ═══════════════════════════════════════════════════════════
+// When OPENAI_BASE_URL points to DeepSeek, the openai provider
+// automatically uses DeepSeek's API. All models below route
+// through the same OpenAI-compatible endpoint.
 // ═══════════════════════════════════════════════════════════
 
 const MODEL_REGISTRY = {
-  // ── PRIMARY: OpenAI-compatible models ──────────────────
-  gpt4o_mini: {
-    id: 'gpt4o_mini',
+  // ── PRIMARY: DeepSeek (via OpenAI-compatible API) ──────
+  deepseek_chat: {
+    id: 'deepseek_chat',
     provider: 'openai',
-    apiModel: 'gpt-4o-mini',
-    costIn: 0.15,    // $/1M input tokens
-    costOut: 0.60,   // $/1M output tokens
-    quality: 85,
-    maxContext: 128000,
-    tierMin: 'breaker',
-    supports: ['text', 'code', 'reasoning'],
-    latencyMs: 1200,
-    failover: 'gpt4o',
-    isDefault: true,
-  },
-  gpt4o: {
-    id: 'gpt4o',
-    provider: 'openai',
-    apiModel: 'gpt-4o',
-    costIn: 2.50,
-    costOut: 10.00,
-    quality: 94,
-    maxContext: 128000,
-    tierMin: 'shatter',
-    supports: ['text', 'code', 'reasoning', 'math', 'vision'],
-    latencyMs: 2000,
-    failover: 'gpt4o_mini',
-  },
-  gpt4o_pro: {
-    id: 'gpt4o_pro',
-    provider: 'openai',
-    apiModel: 'gpt-4o-2024-11-20',
-    costIn: 5.00,
-    costOut: 20.00,
-    quality: 97,
-    maxContext: 128000,
-    tierMin: 'obliterate',
-    supports: ['text', 'code', 'reasoning', 'math', 'vision', 'agent'],
-    latencyMs: 3000,
-    failover: 'gpt4o',
-  },
-
-  // ── DEEPSEEK (cost-effective) ────────────────────────
-  deepseek_v4_flash: {
-    id: 'deepseek_v4_flash',
-    provider: 'deepseek',
-    apiModel: 'deepseek-chat',
-    costIn: 0.10,
-    costOut: 0.20,
-    quality: 82,
-    maxContext: 128000,
-    tierMin: 'breaker',
-    supports: ['text', 'code', 'reasoning'],
-    latencyMs: 1500,
-    failover: 'gpt4o_mini',
-  },
-  deepseek_v4: {
-    id: 'deepseek_v4',
-    provider: 'deepseek',
-    apiModel: 'deepseek-chat',
-    costIn: 0.27,
-    costOut: 1.10,
+    apiModel: process.env.DEFAULT_MODEL || 'deepseek-chat',
+    costIn: 0.27,     // $/1M input tokens
+    costOut: 1.10,    // $/1M output tokens
     quality: 91,
     maxContext: 128000,
     tierMin: 'breaker',
     supports: ['text', 'code', 'reasoning', 'math'],
-    latencyMs: 2500,
-    failover: 'kimi_k26',
+    latencyMs: 2000,
+    failover: 'deepseek_chat',
+    isDefault: true,
   },
-
-  // ── FAILBACK: Other providers ─────────────────────────
-  kimi_k26: {
-    id: 'kimi_k26',
-    provider: 'kimi',
-    apiModel: 'moonshot-v1-128k',
-    costIn: 0.73,
-    costOut: 3.49,
-    quality: 92,
-    maxContext: 256000,
+  deepseek_reasoner: {
+    id: 'deepseek_reasoner',
+    provider: 'openai',
+    apiModel: 'deepseek-reasoner',
+    costIn: 0.55,
+    costOut: 2.19,
+    quality: 96,
+    maxContext: 128000,
     tierMin: 'shatter',
     supports: ['text', 'code', 'reasoning', 'math', 'agent'],
-    latencyMs: 3000,
-    failover: 'deepseek_v4',
-  },
-  gemini_31_pro: {
-    id: 'gemini_31_pro',
-    provider: 'google',
-    apiModel: 'gemini-2.5-pro',
-    costIn: 2.00,
-    costOut: 12.00,
-    quality: 96,
-    maxContext: 1000000,
-    tierMin: 'obliterate',
-    supports: ['text', 'code', 'reasoning', 'math', 'vision', 'agent'],
-    latencyMs: 2000,
-    failover: 'gpt4o',
-  },
-  claude_opus47: {
-    id: 'claude_opus47',
-    provider: 'anthropic',
-    apiModel: 'claude-opus-4-7-20250410',
-    costIn: 5.00,
-    costOut: 25.00,
-    quality: 97,
-    maxContext: 1000000,
-    tierMin: 'obliterate',
-    supports: ['text', 'code', 'reasoning', 'math', 'vision', 'agent'],
     latencyMs: 4000,
-    failover: 'gemini_31_pro',
+    failover: 'deepseek_chat',
   },
 };
 

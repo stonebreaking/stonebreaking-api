@@ -9,8 +9,17 @@ const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
 const logger = require('./utils/logger');
 
-// Load env FIRST
-dotenv.config();
+// ============================================
+// ENVIRONMENT — Production defaults
+// ============================================
+// Render sets PORT automatically
+// DeepSeek is our default provider (OpenAI-compatible)
+
+const REQUIRED_ENV = {
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  OPENAI_BASE_URL: process.env.OPENAI_BASE_URL || 'https://api.deepseek.com',
+  DEFAULT_MODEL: process.env.DEFAULT_MODEL || 'deepseek-chat',
+};
 
 const authRoutes = require('./routes/auth');
 const chatRoutes = require('./routes/chat');
