@@ -16,13 +16,13 @@ services:
       - key: OPENAI_BASE_URL
         value: https://openrouter.ai/api/v1
       - key: DEFAULT_MODEL
-        value: meta-llama/llama-4-maverick:free
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
       - key: CHEAP_MODEL
-        value: meta-llama/llama-4-maverick:free
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
       - key: PREMIUM_MODEL
-        value: qwen/qwen3-235b-a22b:free
+        value: nousresearch/hermes-3-llama-3.1-405b:free
       - key: COMPANION_MODEL
-        value: meta-llama/llama-4-maverick:free
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
       - key: JWT_SECRET
         generateValue: true
       - key: DAILY_SPEND_CAP_USD

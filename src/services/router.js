@@ -19,7 +19,7 @@ const MODEL_REGISTRY = {
   free_chat: {
     id: 'free_chat',
     provider: 'openai',
-    apiModel: process.env.CHEAP_MODEL || 'meta-llama/llama-4-maverick:free',
+    apiModel: process.env.CHEAP_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
     costIn: 0,
     costOut: 0,
     quality: 85,
@@ -33,7 +33,7 @@ const MODEL_REGISTRY = {
   quality_chat: {
     id: 'quality_chat',
     provider: 'openai',
-    apiModel: process.env.PREMIUM_MODEL || 'qwen/qwen3-235b-a22b:free',
+    apiModel: process.env.PREMIUM_MODEL || 'nousresearch/hermes-3-llama-3.1-405b:free',
     costIn: 0,
     costOut: 0,
     quality: 92,
