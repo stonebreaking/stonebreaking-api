@@ -1,53 +1,34 @@
-# 🏔️ StoneBreaking — API Backend (Render.com)
+# 🏔️ StoneBreaking — API Backend
 
-AI asistan backend'i. Render.com'da ücretsiz çalışır.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/stonebreaking/stonebreaking-api)
 
-## Deploy Adımları
+## Tek Tıkla Deploy
 
-### 1. DeepSeek API Key Al (ÜCRETSİZ)
-1. https://platform.deepseek.com → Sign Up
-2. Email + telefon doğrula → 5M ücretsiz token
-3. API Keys → "Create new API key" → kopyala
+1. Yukarıdaki **"Deploy to Render"** butonuna tıkla
+2. Render'a GitHub ile giriş yap
+3. `OPENAI_API_KEY` değerine DeepSeek API key'ini yapıştır
+4. **"Apply"** butonuna bas
+5. Deploy başlar → URL alırsın ✅
 
-### 2. Render.com'a Deploy
-1. https://render.com → GitHub ile giriş yap
-2. "New" → "Web Service"
-3. Bu repo'yu bağla: `stonebreaking-api`
-4. Ayarlar:
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-5. Environment Variables ekle:
+## Manuel Deploy
+
+1. https://dashboard.render.com → "New" → "Web Service"
+2. `stonebreaking-api` repo'sunu seç
+3. Build: `npm install` / Start: `npm start`
+4. Environment Variables:
    ```
-   OPENAI_API_KEY     = sk-deepseek-key-ini-buraya-yapistir
-   OPENAI_BASE_URL    = https://api.deepseek.com
-   DEFAULT_MODEL      = deepseek-chat
-   CHEAP_MODEL        = deepseek-chat
-   PREMIUM_MODEL      = deepseek-chat
-   JWT_SECRET         = rastgele-64-karakter-bir-sey-yaz
-   DAILY_SPEND_CAP_USD= 20
-   EMERGENCY_KILL_SWITCH=false
+   OPENAI_API_KEY      = sk-buraya-deepseek-key
+   OPENAI_BASE_URL     = https://api.deepseek.com
+   DEFAULT_MODEL       = deepseek-chat
+   JWT_SECRET          = rastgele-bir-sey-yaz
+   DAILY_SPEND_CAP_USD = 20
    ```
-6. "Create Web Service" → Deploy başlar
-7. URL alırsın: `https://stonebreaking-api.onrender.com`
-
-### 3. Frontend'i Bağla
-GitHub Pages'deki frontend'de ⚙️ butonundan:
-- Backend URL: `https://stonebreaking-api.onrender.com`
-- Test Et → ✅ Bağlı
+5. "Create Web Service" → Deploy başlar
 
 ## Test
 
 ```bash
-# Health check
 curl https://stonebreaking-api.onrender.com/api/health
-
-# Demo chat
-curl -X POST https://stonebreaking-api.onrender.com/api/demo/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Merhaba!"}'
 ```
 
-## Maliyet
-- Render Free Tier: **$0/ay**
-- DeepSeek 5M ücretsiz token: ~2000-5000 mesaj
-- Toplam: **$0 başlangıç**
+## Maliyet: $0/ay (Render Free + DeepSeek 5M ücretsiz token)

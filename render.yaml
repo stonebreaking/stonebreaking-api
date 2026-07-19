@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: stonebreaking-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        value: https://api.deepseek.com
+      - key: DEFAULT_MODEL
+        value: deepseek-chat
+      - key: CHEAP_MODEL
+        value: deepseek-chat
+      - key: PREMIUM_MODEL
+        value: deepseek-reasoner
+      - key: COMPANION_MODEL
+        value: deepseek-chat
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DAILY_SPEND_CAP_USD
+        value: "20"
+      - key: HOURLY_SPEND_CAP_USD
+        value: "5"
+      - key: MAX_PER_REQUEST_COST_USD
+        value: "0.05"
+      - key: EMERGENCY_KILL_SWITCH
+        value: "false"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: "30"
