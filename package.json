@@ -1,0 +1,37 @@
+{
+  "name": "stonebreaking-backend",
+  "version": "2.0.0",
+  "description": "StoneBreaking AI Platform — Break the Limits.",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "db:migrate": "node src/db/migrate.js",
+    "db:seed": "node src/db/seed.js",
+    "generate-keys": "node src/scripts/generate-keys.js",
+    "test": "node tests/run-tests.js",
+    "postinstall": "echo '✅ StoneBreaking dependencies installed'"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.13.0",
+    "redis": "^4.7.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0",
+    "express-rate-limit": "^7.4.0",
+    "ssestream": "^1.1.0",
+    "zod": "^3.23.0",
+    "dotenv": "^16.4.0",
+    "winston": "^3.14.0",
+    "crypto": "^1.0.1",
+    "openai": "^4.67.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

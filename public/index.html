@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StoneBreaking — Break the Limits.</title>
+  <meta name="description" content="Break the Limits — AI asistanın">
+  <meta name="theme-color" content="#9f7238">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="StoneBreaking">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --gold-bright:#ebc777;--gold:#d4af37;--gold-mid:#9f7238;--gold-dim:#724d22;--gold-deep:#6e4c1e;--gold-glow:#ffdf9b;--gold-subtle:rgba(212,175,55,0.06);
+      --bg:#000;--sf:#0a0907;--sf2:#0e0b06;--sf3:#1a1712;--sf4:#26180b;--bd:#1a1410;--bd-g:rgba(212,175,55,0.2);--bd-gh:rgba(212,175,55,0.45);
+      --tx:#f0ece4;--txd:#8a7e6e;--txm:#4a4238;--red:#c44040;--green:#7dba5c
+    }
+    html,body{height:100%}
+    body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--tx);display:flex;flex-direction:column;overflow:hidden}
+    body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 800px 600px at 15% 40%,rgba(158,114,56,0.04)0%,transparent 70%),radial-gradient(ellipse 600px 500px at 85% 60%,rgba(212,175,55,0.03)0%,transparent 70%),radial-gradient(ellipse 400px 300px at 50% 90%,rgba(110,76,30,0.05)0%,transparent 70%);pointer-events:none;z-index:0}
+
+    .hd{background:var(--sf);border-bottom:1px solid var(--bd);padding:10px 24px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:100}
+    .hd::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 5%,var(--gold-dim),var(--gold-mid),var(--gold-dim),transparent 95%);opacity:0.4}
+    .lg{display:flex;align-items:center;gap:14px}
+    .lg-i{height:40px;width:auto}
+    .lg-d{width:1px;height:26px;background:linear-gradient(to bottom,transparent,var(--gold-dim),transparent)}
+    .lg-t{font-size:16px;font-weight:800;letter-spacing:4px;text-transform:uppercase;color:var(--tx)}
+    .lg-s{font-size:8px;color:var(--gold-mid);letter-spacing:5px;text-transform:uppercase;font-weight:500;margin-top:1px}
+    .hd-r{display:flex;gap:10px;align-items:center}
+    .sp{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--txd);padding:4px 10px;border-radius:4px;background:var(--sf2);border:1px solid var(--bd)}
+    .dt{width:5px;height:5px;border-radius:50%;background:var(--gold-dim)}
+    .dt.on{background:var(--green);box-shadow:0 0 4px rgba(125,186,92,0.5)}.dt.off{background:var(--red)}.dt.w{background:var(--gold);animation:bk 1.5s infinite}
+    @keyframes bk{0%,100%{opacity:.4}50%{opacity:1}}
+    .tb{padding:3px 10px;border-radius:3px;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:2.5px;border:1px solid var(--bd-g);color:var(--gold-mid);background:var(--gold-subtle)}
+    .gb{background:none;border:1px solid var(--bd);color:var(--txm);width:30px;height:30px;border-radius:4px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+    .gb:hover{border-color:var(--bd-gh);color:var(--gold-mid)}
+
+    .mn{flex:1;display:flex;flex-direction:column;max-width:840px;margin:0 auto;width:100%;position:relative;z-index:1}
+    .ch{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:18px;scrollbar-width:thin;scrollbar-color:var(--sf3) transparent}
+    .ch::-webkit-scrollbar{width:3px}.ch::-webkit-scrollbar-thumb{background:var(--sf3);border-radius:2px}
+
+    .wc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:24px;padding:40px 20px}
+    .wc-l{width:300px;max-width:75vw}
+    .wc-ln{width:60px;height:1px;background:linear-gradient(90deg,transparent,var(--gold-mid),transparent)}
+    .wc-t{font-size:11px;color:var(--gold-mid);letter-spacing:8px;text-transform:uppercase;font-weight:500}
+    .wc-d{color:var(--txd);font-size:14px;max-width:380px;line-height:1.8}
+    .sg{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:540px}
+    .si{background:var(--sf2);border:1px solid var(--bd);border-radius:4px;padding:14px 16px;text-align:left;cursor:pointer;transition:all .2s;font-size:13px;color:var(--txd);line-height:1.5}
+    .si:hover{border-color:var(--bd-gh);background:var(--sf3);color:var(--tx)}
+    .sl{font-size:8px;color:var(--gold-mid);font-weight:800;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:5px}
+
+    .m{display:flex;gap:10px;max-width:80%;animation:mi .2s ease}
+    @keyframes mi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+    .m.u{align-self:flex-end;flex-direction:row-reverse}
+    .ma{width:26px;height:26px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;font-weight:800;letter-spacing:.5px}
+    .m.u .ma{background:var(--sf4);color:var(--txm)}.m.a .ma{background:var(--gold-mid);color:#000}
+    .mb{padding:11px 15px;border-radius:6px;line-height:1.7;font-size:13.5px}
+    .m.u .mb{background:var(--sf2);border:1px solid var(--bd);border-bottom-right-radius:2px}
+    .m.a .mb{background:var(--sf2);border:1px solid var(--bd-g);border-bottom-left-radius:2px;border-left:1px solid var(--bd-gh)}
+    .mb pre{background:#000;padding:10px 12px;border-radius:3px;overflow-x:auto;margin:8px 0;font-size:12px;border:1px solid var(--bd);font-family:'SF Mono','Fira Code',monospace}
+    .mb code{font-family:'SF Mono','Fira Code',monospace}
+    .mb p{margin-bottom:6px}.mb p:last-child{margin-bottom:0}
+
+    .tp{display:flex;gap:3px;padding:5px 0}
+    .tp span{width:5px;height:5px;background:var(--gold-mid);border-radius:50%;animation:bn 1.4s ease-in-out infinite}
+    .tp span:nth-child(2){animation-delay:.15s}.tp span:nth-child(3){animation-delay:.3s}
+    @keyframes bn{0%,60%,100%{transform:translateY(0);opacity:.3}30%{transform:translateY(-5px);opacity:1}}
+
+    .ia{padding:10px 24px 18px;border-top:1px solid var(--bd);background:var(--sf);position:relative}
+    .ia::before{content:'';position:absolute;top:-1px;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 5%,var(--gold-dim),var(--gold-mid),var(--gold-dim),transparent 95%);opacity:.25}
+    .ir{display:flex;gap:8px;align-items:flex-end;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:5px 5px 5px 14px;transition:border-color .2s}
+    .ir:focus-within{border-color:var(--bd-gh)}
+    .ir textarea{flex:1;background:none;border:none;color:var(--tx);font-size:14px;font-family:'Inter',sans-serif;resize:none;outline:none;max-height:100px;padding:8px 0;line-height:1.5}
+    .ir textarea::placeholder{color:var(--txm)}
+    .sb{width:34px;height:34px;border-radius:4px;background:var(--gold-mid);border:none;color:#000;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;transition:all .15s;flex-shrink:0}
+    .sb:hover{background:var(--gold-bright)}.sb:disabled{opacity:.15;cursor:not-allowed}
+    .ih{font-size:9px;color:var(--txm);margin-top:8px;text-align:center;letter-spacing:1.5px;text-transform:uppercase}
+
+    .cp{display:none;position:fixed;top:0;right:0;width:360px;height:100vh;background:var(--sf);border-left:1px solid var(--bd-g);z-index:200;padding:28px;overflow-y:auto;animation:sl .2s ease}
+    @keyframes sl{from{transform:translateX(100%)}to{transform:translateX(0)}}
+    .cp.open{display:block}
+    .ct{font-size:11px;font-weight:800;margin-bottom:28px;color:var(--gold-mid);text-transform:uppercase;letter-spacing:4px}
+    .cg{margin-bottom:18px}
+    .cl{font-size:9px;color:var(--txd);text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;font-weight:700}
+    .ci{width:100%;background:var(--sf2);border:1px solid var(--bd);border-radius:4px;padding:9px 12px;color:var(--tx);font-size:13px;font-family:'Inter',sans-serif;outline:none;transition:border-color .2s}
+    .ci:focus{border-color:var(--bd-gh)}
+    .cb{width:100%;padding:9px;background:var(--gold-mid);border:none;border-radius:4px;color:#000;font-weight:800;font-size:10px;cursor:pointer;text-transform:uppercase;letter-spacing:2px;transition:all .2s;margin-top:6px}
+    .cb:hover{background:var(--gold-bright)}
+    .cb.a{background:none;border:1px solid var(--bd);color:var(--txd)}.cb.a:hover{border-color:var(--txm);color:var(--tx)}
+
+    @media(max-width:768px){.sg{grid-template-columns:1fr}.hd{padding:10px 16px}.ch{padding:16px}.ia{padding:8px 16px 14px}.cp{width:100%}.wc-l{width:200px}.lg-i{height:30px}}
+  </style>
+</head>
+<body>
+  <div class="hd">
+    <div class="lg">
+      <img src="stonebreaking-gold-kintsugi.png" alt="" class="lg-i">
+      <div class="lg-d"></div>
+      <div><div class="lg-t">StoneBreaking</div><div class="lg-s">Break the Limits.</div></div>
+    </div>
+    <div class="hd-r">
+      <div class="sp"><span class="dt" id="dot"></span><span id="stxt">—</span></div>
+      <span class="tb" id="tbdg">Demo</span>
+      <button class="gb" onclick="tcfg()">⚙</button>
+    </div>
+  </div>
+
+  <div class="cp" id="cfg">
+    <div class="ct">Yapılandırma</div>
+    <div class="cg"><div class="cl">Backend URL</div><input class="ci" id="burl" value="https://stonebreaking-api.onrender.com" placeholder="https://..."></div>
+    <div class="cg"><div class="cl">API Key (DeepSeek/OpenAI)</div><input class="ci" id="ak" type="password" placeholder="sk-..."><div style="font-size:9px;color:var(--txm);margin-top:5px">Backend'de ayarlıysa gerekmez. platform.deepseek.com'dan alabilirsiniz.</div></div>
+    <div class="cg"><div class="cl">Sistem Promptu</div><textarea class="ci" id="sp" rows="2" placeholder="Özel prompt (opsiyonel)"></textarea></div>
+    <div class="cg"><button class="cb" onclick="tst()">Bağlantıyı Test Et</button><button class="cb a" onclick="tcfg()">Kapat</button></div>
+  </div>
+
+  <div class="mn">
+    <div class="ch" id="chat">
+      <div class="wc" id="wc">
+        <img src="stonebreaking-gold-kintsugi.png" alt="StoneBreaking" class="wc-l">
+        <div class="wc-ln"></div>
+        <div class="wc-t">Break the Limits.</div>
+        <div class="wc-d">Sınırları aşan AI asistanın.<br>Sor, kodla, keşfet.</div>
+        <div class="sg">
+          <div class="si" onclick="usug(this)"><div class="sl">Kod</div>Python ile REST API yaz</div>
+          <div class="si" onclick="usug(this)"><div class="sl">Yaratıcı</div>Siyah altın marka hikayesi</div>
+          <div class="si" onclick="usug(this)"><div class="sl">Analiz</div>Türkiye AI pazar analizi</div>
+          <div class="si" onclick="usug(this)"><div class="sl">Matematik</div>Sigmoid fonksiyonun türevi</div>
+        </div>
+      </div>
+    </div>
+    <div class="ia">
+      <div class="ir">
+        <textarea id="inp" placeholder="Mesajını yaz..." rows="1" onkeydown="okey(event)" oninput="rsz(this)"></textarea>
+        <button class="sb" id="sbn" onclick="snd()">▶</button>
+      </div>
+      <div class="ih">StoneBreaking — Hangi model kullanıldığını görmezsin</div>
+    </div>
+  </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// StoneBreaking Frontend v2.0
+// GitHub Pages (frontend) + Render (backend) mimarisi
+// ═══════════════════════════════════════════════════════════
+
+let conn=false, str=false;
+// Backend URL — Render'a deploy edince bu URL değişecek
+let BASE = localStorage.getItem('sb_api') || 'https://stonebreaking-api.onrender.com';
+
+// Kaydedilmiş URL'yi input'a yaz
+document.getElementById('burl').value = BASE;
+
+async function chk(){
+  try{
+    const r=await fetch(BASE+'/api/health',{signal:AbortSignal.timeout(5000)});
+    const d=await r.json();
+    conn=d.ai?.configured||false;
+    document.getElementById('dot').className='dt '+(conn?'on':'w');
+    document.getElementById('stxt').textContent=conn?'Bağlı':'API Key gerekli';
+    return d;
+  }catch{
+    conn=false;
+    document.getElementById('dot').className='dt off';
+    document.getElementById('stxt').textContent='Bağlantı yok';
+    return null;
+  }
+}
+
+async function snd(){
+  const i=document.getElementById('inp'), m=i.value.trim();
+  if(!m||str)return;
+  document.getElementById('wc').style.display='none';
+  am('u',m); i.value=''; rsz(i);
+  const tw=at();
+  str=true; document.getElementById('sbn').disabled=true;
+
+  // API key varsa header'a ekle (backend yoksa doğrudan DeepSeek'a git)
+  const apiKey = document.getElementById('ak').value;
+  const headers = {'Content-Type':'application/json'};
+  if(apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
+
+  try{
+    const r=await fetch(BASE+'/api/demo/chat',{
+      method:'POST', headers,
+      body:JSON.stringify({message:m,system_prompt:document.getElementById('sp')?.value||null})
+    });
+    if(!r.ok){const e=await r.json().catch(()=>({error:'Hata'}));rt(tw);am('a','❌ '+(e.error||'Hata'));dn();return;}
+    rt(tw);
+    const rd=r.body.getReader(),dc=new TextDecoder();
+    let buf='',full='',el=null;
+    while(true){
+      const{done,value}=await rd.read(); if(done)break;
+      buf+=dc.decode(value,{stream:true});
+      const ls=buf.split('\n'); buf=ls.pop()||'';
+      for(const l of ls){if(!l.startsWith('data: '))continue;
+        try{const d=JSON.parse(l.slice(6));
+          if(d.type==='chunk'){full+=d.content;if(!el)el=am('a',full,true);else um(el,full);}
+          if(d.type==='done'&&el)fm(el,full);
+          if(d.type==='error'){if(!el)am('a','❌ '+d.message);else um(el,full+'\n\n❌ '+d.message);}
+        }catch{}
+      }
+    }
+  }catch(e){rt(tw);am('a','❌ Bağlantı hatası: '+e.message+'\n\nBackend çalışmıyor olabilir. Render.com\'a deploy ettiğinizden emin olun.');}
+  dn();
+}
+
+function dn(){str=false;document.getElementById('sbn').disabled=false;document.getElementById('inp').focus();}
+
+function am(r,t,s=false){
+  const c=document.getElementById('chat'),d=document.createElement('div');
+  d.className='m '+(r==='u'?'u':'a');
+  const av=document.createElement('div');av.className='ma';
+  av.textContent=r==='u'?'S':'SB';
+  const b=document.createElement('div');b.className='mb';b.innerHTML=f(t);
+  d.appendChild(av);d.appendChild(b);c.appendChild(d);c.scrollTop=99999;return d;
+}
+function um(e,t){const b=e.querySelector('.mb');if(b){b.innerHTML=f(t);document.getElementById('chat').scrollTop=99999;}}
+function fm(e,t){const b=e.querySelector('.mb');if(b)b.innerHTML=f(t);}
+function f(t){if(!t)return'';t=t.replace(/```(\w*)\n([\s\S]*?)```/g,'<pre><code>$2</code></pre>');t=t.replace(/`([^`]+)`/g,'<code style="background:#000;padding:1px 4px;border-radius:2px;font-size:12px;">$1</code>');t=t.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');t=t.replace(/\*([^*]+)\*/g,'<em>$1</em>');t=t.replace(/\n/g,'<br>');return t;}
+function at(){const c=document.getElementById('chat'),d=document.createElement('div');d.className='m a';d.id='tw';d.innerHTML='<div class="ma">SB</div><div class="mb"><div class="tp"><span></span><span></span><span></span></div></div>';c.appendChild(d);c.scrollTop=99999;return d;}
+function rt(e){if(e?.parentNode)e.parentNode.removeChild(e);}
+function okey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();snd();}}
+function rsz(e){e.style.height='auto';e.style.height=Math.min(e.scrollHeight,100)+'px';}
+function usug(e){document.getElementById('inp').value=e.textContent.trim().split('\n').pop().trim();snd();}
+function tcfg(){document.getElementById('cfg').classList.toggle('open');}
+async function tst(){
+  BASE=document.getElementById('burl').value||'https://stonebreaking-api.onrender.com';
+  localStorage.setItem('sb_api',BASE);
+  const d=await chk();
+  if(d)alert('✅ Bağlantı başarılı!\n\nDurum: '+d.status+'\nAI: '+(d.ai?.configured?'Aktif ✅':'Yapılandırılmamış ⚠️'));
+  else alert('❌ Bağlantı başarısız.\n\nBackend\'in çalıştığından emin ol:\n'+BASE);
+}
+chk();
+
+// PWA
+if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+</script>
+</body>
+</html>
