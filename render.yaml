@@ -14,15 +14,15 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_BASE_URL
-        value: https://api.deepseek.com
+        value: https://generativelanguage.googleapis.com/v1beta/openai/
       - key: DEFAULT_MODEL
-        value: deepseek-chat
+        value: gemini-2.0-flash
       - key: CHEAP_MODEL
-        value: deepseek-chat
+        value: gemini-2.0-flash
       - key: PREMIUM_MODEL
-        value: deepseek-reasoner
+        value: gemini-2.5-flash
       - key: COMPANION_MODEL
-        value: deepseek-chat
+        value: gemini-2.0-flash
       - key: JWT_SECRET
         generateValue: true
       - key: DAILY_SPEND_CAP_USD
@@ -30,7 +30,7 @@ services:
       - key: HOURLY_SPEND_CAP_USD
         value: "5"
       - key: MAX_PER_REQUEST_COST_USD
-        value: "0.05"
+        value: "0.10"
       - key: EMERGENCY_KILL_SWITCH
         value: "false"
       - key: RATE_LIMIT_WINDOW_MS

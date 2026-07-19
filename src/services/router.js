@@ -1,12 +1,8 @@
 // ═══════════════════════════════════════════════════════════
-// StoneBreaking — AI Model Router (THE CORE BRAIN) v2
+// StoneBreaking — AI Model Router (THE CORE BRAIN) v2.1
 // ═══════════════════════════════════════════════════════════
-// Fully functional router that connects to real AI providers.
-// - Smart model selection based on query type + tier + cost
-// - Retry + failover logic
-// - Personality system prompt injection (companion compatible)
-// - Token estimation + cost tracking on every request
-// - Users NEVER see which model is used. StoneBreaking IS the AI.
+// Gemini-powered router with smart model selection.
+// Users NEVER see which model is used. StoneBreaking IS the AI.
 // ═══════════════════════════════════════════════════════════
 
 const logger = require('../utils/logger');
@@ -17,36 +13,36 @@ const tokenEstimator = require('./tokenEstimator');
 let openaiProvider = null;
 
 // ═══════════════════════════════════════════════════════════
-// MODEL REGISTRY — DeepSeek as primary (cheapest + best)
+// MODEL REGISTRY — Google Gemini via OpenAI-compatible API
 // ═══════════════════════════════════════════════════════════
 
 const MODEL_REGISTRY = {
-  deepseek_chat: {
-    id: 'deepseek_chat',
+  gemini_flash: {
+    id: 'gemini_flash',
     provider: 'openai',
-    apiModel: process.env.CHEAP_MODEL || 'deepseek-chat',
-    costIn: 0.27,     // $/1M input tokens
-    costOut: 1.10,    // $/1M output tokens
-    quality: 91,
-    maxContext: 128000,
+    apiModel: process.env.CHEAP_MODEL || 'gemini-2.0-flash',
+    costIn: 0.075,     // $/1M input tokens (free tier)
+    costOut: 0.30,     // $/1M output tokens (free tier)
+    quality: 90,
+    maxContext: 1048576,
     tierMin: 'breaker',
-    supports: ['text', 'code', 'reasoning', 'math'],
-    latencyMs: 2000,
+    supports: ['text', 'code', 'reasoning', 'math', 'creative'],
+    latencyMs: 1500,
     failover: null,
     isDefault: true,
   },
-  deepseek_reasoner: {
-    id: 'deepseek_reasoner',
+  gemini_pro: {
+    id: 'gemini_pro',
     provider: 'openai',
-    apiModel: process.env.PREMIUM_MODEL || 'deepseek-reasoner',
-    costIn: 0.55,
-    costOut: 2.19,
-    quality: 96,
-    maxContext: 128000,
+    apiModel: process.env.PREMIUM_MODEL || 'gemini-2.5-flash',
+    costIn: 0.15,
+    costOut: 0.60,
+    quality: 95,
+    maxContext: 1048576,
     tierMin: 'shatter',
     supports: ['text', 'code', 'reasoning', 'math', 'agent'],
-    latencyMs: 4000,
-    failover: 'deepseek_chat',
+    latencyMs: 3000,
+    failover: 'gemini_flash',
   },
 };
 
@@ -59,9 +55,9 @@ function loadProvider(providerName) {
     if (!openaiProvider) {
       try {
         openaiProvider = require('../providers/openaiProvider');
-        logger.info('✅ OpenAI provider loaded');
+        logger.info('✅ OpenAI-compatible provider loaded');
       } catch (err) {
-        logger.error(`❌ Failed to load OpenAI provider: ${err.message}`);
+        logger.error(`❌ Failed to load provider: ${err.message}`);
         return null;
       }
     }
@@ -135,28 +131,28 @@ function selectModel(classification, userTier, platformSpendPct) {
   const tierOrder = { breaker: 0, shatter: 1, obliterate: 2 };
   const userLevel = tierOrder[userTier] ?? 0;
 
-  // ── Emergency: Platform spend > 90% ──────────────────
+  // Emergency: Platform spend > 90%
   if (platformSpendPct > 90) {
-    logger.warn(`🚨 EMERGENCY: Platform spend at ${platformSpendPct}% — forcing cheapest model`);
-    return MODEL_REGISTRY.deepseek_chat;
+    logger.warn(`🚨 EMERGENCY: Platform spend at ${platformSpendPct}%`);
+    return MODEL_REGISTRY.gemini_flash;
   }
 
-  // ── Auto-downgrade at 80% spend ──────────────────────
+  // Auto-downgrade at 80% spend
   if (platformSpendPct > 80) {
-    logger.warn(`⚠️  Platform spend at ${platformSpendPct}% — cost optimization active`);
-    return MODEL_REGISTRY.deepseek_chat;
+    logger.warn(`⚠️  Platform spend at ${platformSpendPct}%`);
+    return MODEL_REGISTRY.gemini_flash;
   }
 
-  // ── Complex code/math/reasoning/agent + high tier → reasoner ──
+  // Complex code/math/reasoning/agent + high tier → pro model
   if (complexity === 'complex' && (type === 'code' || type === 'math' || type === 'reasoning' || type === 'agent')) {
     if (userLevel >= 1) {
-      return MODEL_REGISTRY.deepseek_reasoner;
+      return MODEL_REGISTRY.gemini_pro;
     }
-    return MODEL_REGISTRY.deepseek_chat;
+    return MODEL_REGISTRY.gemini_flash;
   }
 
-  // ── Default: cost-optimized quality ───────────────────
-  return MODEL_REGISTRY.deepseek_chat;
+  // Default: cost-optimized
+  return MODEL_REGISTRY.gemini_flash;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -164,47 +160,37 @@ function selectModel(classification, userTier, platformSpendPct) {
 // ═══════════════════════════════════════════════════════════
 
 async function handleChat({ message, history, user, platformSpendPct, systemPrompt }) {
-  // 1. Classify the query
   const classification = classifyQuery(message, history);
-  logger.info(`📍 Query classified: type=${classification.type}, complexity=${classification.complexity}, confidence=${classification.confidence.toFixed(2)}`);
+  logger.info(`📍 Query classified: type=${classification.type}, complexity=${classification.complexity}`);
 
-  // 2. Select model
   let model = selectModel(classification, user.tier, platformSpendPct);
 
-  // 3. Tier access check
   const tierOrder = { breaker: 0, shatter: 1, obliterate: 2 };
   if ((tierOrder[user.tier] ?? 0) < (tierOrder[model.tierMin] ?? 0)) {
-    logger.info(`🔒 User tier ${user.tier} can't access ${model.id}, downgrading`);
-    model = MODEL_REGISTRY.deepseek_chat;
+    model = MODEL_REGISTRY.gemini_flash;
   }
 
-  // 4. Estimate tokens and cost
   const inputTokens = tokenEstimator.estimateTokens(message, { language: 'mixed' });
   const historyTokens = tokenEstimator.estimateTokensFromMessages(history);
   const totalInputTokens = inputTokens + historyTokens;
-  const estimatedOutputTokens = classification.complexity === 'complex' ? 1200 : 800;
+  const estimatedOutputTokens = classification.complexity === 'complex' ? 1500 : 1000;
   const estimatedCost = tokenEstimator.calculateCost(totalInputTokens, estimatedOutputTokens, model);
 
-  // 5. Cost check
   const costCheck = costGuard.canAfford(estimatedCost);
   if (!costCheck.allowed) {
-    logger.warn(`🚫 Cost guard blocked request: ${costCheck.reason}`);
-    model = MODEL_REGISTRY.deepseek_chat;
+    model = MODEL_REGISTRY.gemini_flash;
   }
 
-  // 6. Per-request cost limit
-  const maxPerRequest = parseFloat(process.env.MAX_PER_REQUEST_COST_USD) || 0.05;
+  const maxPerRequest = parseFloat(process.env.MAX_PER_REQUEST_COST_USD) || 0.10;
   if (estimatedCost > maxPerRequest) {
     throw new Error('Mesajınız çok uzun. Lütfen kısaltın.');
   }
 
-  // 7. Load provider
   const provider = loadProvider(model.provider);
   if (!provider) {
     throw new Error('AI servisi geçici olarak kullanılamıyor.');
   }
 
-  // 8. Call AI with retry + failover
   const MAX_RETRIES = 1;
   let retries = 0;
   let response;
@@ -220,7 +206,7 @@ async function handleChat({ message, history, user, platformSpendPct, systemProm
       break;
     } catch (err) {
       retries++;
-      logger.error(`❌ Model ${model.id} failed (attempt ${retries}/${MAX_RETRIES + 1}): ${err.message}`);
+      logger.error(`❌ Model ${model.id} failed (attempt ${retries}): ${err.message}`);
 
       if (retries > MAX_RETRIES) {
         if (model.failover && MODEL_REGISTRY[model.failover]) {
@@ -241,34 +227,24 @@ async function handleChat({ message, history, user, platformSpendPct, systemProm
             }
           }
         }
-        if (err.code === 'rate_limit') {
-          throw new Error('Şu anda çok yoğun talep var. Biraz bekleyip tekrar deneyin.');
-        }
         throw new Error('AI modelleri geçici olarak kullanılamıyor. Lütfen biraz sonra deneyin.');
       }
 
-      // Wait before retry (exponential backoff)
       await new Promise(r => setTimeout(r, 1000 * Math.pow(2, retries)));
     }
   }
 
-  // 9. Calculate actual cost
   const actualInputTokens = response.usage?.prompt_tokens || totalInputTokens;
   const actualOutputTokens = response.usage?.completion_tokens || estimatedOutputTokens;
   const actualCost = tokenEstimator.calculateCost(actualInputTokens, actualOutputTokens, model);
 
-  // 10. Record cost
   costGuard.recordSpend(actualCost, model.id);
 
-  logger.info(`✅ Chat completed: model=${model.id} tokens=${actualInputTokens}+${actualOutputTokens} cost=$${actualCost.toFixed(4)} latency=${response.latencyMs}ms`);
+  logger.info(`✅ Chat: model=${model.id} tokens=${actualInputTokens}+${actualOutputTokens} cost=$${actualCost.toFixed(4)} latency=${response.latencyMs}ms`);
 
-  // 11. Return (NEVER expose model identity to user)
   return {
     content: response.content,
-    usage: {
-      tokensIn: actualInputTokens,
-      tokensOut: actualOutputTokens,
-    },
+    usage: { tokensIn: actualInputTokens, tokensOut: actualOutputTokens },
     internalMeta: {
       modelUsed: model.id,
       apiModel: model.apiModel,
@@ -286,36 +262,31 @@ async function handleChat({ message, history, user, platformSpendPct, systemProm
 // ═══════════════════════════════════════════════════════════
 
 async function handleChatStream({ message, history, user, platformSpendPct, systemPrompt }, onChunk, onDone) {
-  // 1. Classify + select model
   const classification = classifyQuery(message, history);
   let model = selectModel(classification, user.tier, platformSpendPct);
 
-  // Tier check
   const tierOrder = { breaker: 0, shatter: 1, obliterate: 2 };
   if ((tierOrder[user.tier] ?? 0) < (tierOrder[model.tierMin] ?? 0)) {
-    model = MODEL_REGISTRY.deepseek_chat;
+    model = MODEL_REGISTRY.gemini_flash;
   }
 
-  // Cost check
   const inputTokens = tokenEstimator.estimateTokens(message, { language: 'mixed' });
   const historyTokens = tokenEstimator.estimateTokensFromMessages(history);
   const totalInputTokens = inputTokens + historyTokens;
-  const estimatedCost = tokenEstimator.calculateCost(totalInputTokens, 800, model);
+  const estimatedCost = tokenEstimator.calculateCost(totalInputTokens, 1000, model);
 
   const costCheck = costGuard.canAfford(estimatedCost);
   if (!costCheck.allowed) {
-    model = MODEL_REGISTRY.deepseek_chat;
+    model = MODEL_REGISTRY.gemini_flash;
   }
 
-  // Per-request cost limit
-  const maxPerRequest = parseFloat(process.env.MAX_PER_REQUEST_COST_USD) || 0.05;
+  const maxPerRequest = parseFloat(process.env.MAX_PER_REQUEST_COST_USD) || 0.10;
   if (estimatedCost > maxPerRequest) {
     onChunk('\n\n[Mesajınız çok uzun. Lütfen kısaltın.]');
     onDone({ internalMeta: { modelUsed: 'none', costUsd: 0, latencyMs: 0, tokensOut: 0 } });
     return;
   }
 
-  // 2. Call provider
   const provider = loadProvider(model.provider);
   if (!provider) {
     onChunk('\n\n[AI servisi şu anda kullanılamıyor.]');
@@ -330,7 +301,7 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
     await provider.chatStream({
       model: model.apiModel || model.id,
       messages: history.concat([{ role: 'user', content: message }]),
-      maxTokens: classification.complexity === 'complex' ? 1200 : 800,
+      maxTokens: classification.complexity === 'complex' ? 1500 : 1000,
       systemPrompt: systemPrompt || null,
     }, (chunk) => {
       fullContent += chunk;
@@ -343,7 +314,7 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
 
       costGuard.recordSpend(actualCost, model.id);
 
-      logger.info(`✅ Stream completed: model=${model.id} tokens=${actualInputTokens}+${actualOutputTokens} cost=$${actualCost.toFixed(4)} latency=${latencyMs}ms`);
+      logger.info(`✅ Stream: model=${model.id} tokens=${actualInputTokens}+${actualOutputTokens} cost=$${actualCost.toFixed(4)} latency=${latencyMs}ms`);
 
       onDone({
         internalMeta: {
@@ -357,7 +328,6 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
         },
       });
     }, (err) => {
-      // Error callback — try failover
       logger.error(`❌ Stream error: ${err.message}`);
 
       if (model.failover && MODEL_REGISTRY[model.failover]) {
@@ -367,7 +337,7 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
           failProvider.chatStream({
             model: failModel.apiModel || failModel.id,
             messages: history.concat([{ role: 'user', content: message }]),
-            maxTokens: 800,
+            maxTokens: 1000,
             systemPrompt: systemPrompt || null,
           }, onChunk, onDone).catch(() => {
             onChunk('\n\n[Bağlantı hatası. Lütfen tekrar deneyin.]');
@@ -389,13 +359,11 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
 }
 
 // ═══════════════════════════════════════════════════════════
-// COMPANION-SPECIFIC CHAT (delegates to main router)
+// COMPANION CHAT
 // ═══════════════════════════════════════════════════════════
 
 async function handleCompanionChat({ systemPrompt, messages, user, tier }) {
-  // Companion always uses cost-effective model
-  let model = MODEL_REGISTRY.deepseek_chat;
-
+  const model = MODEL_REGISTRY.gemini_flash;
   const provider = loadProvider(model.provider);
   if (!provider) {
     throw new Error('Companion servisi geçici olarak kullanılamıyor.');
@@ -405,7 +373,7 @@ async function handleCompanionChat({ systemPrompt, messages, user, tier }) {
     const response = await provider.chat({
       model: model.apiModel || model.id,
       messages,
-      maxTokens: 600,
+      maxTokens: 800,
       temperature: 0.8,
       systemPrompt,
     });
@@ -416,15 +384,9 @@ async function handleCompanionChat({ systemPrompt, messages, user, tier }) {
 
     costGuard.recordSpend(costUsd, model.id);
 
-    logger.info(`🤖 Companion chat: model=${model.id} cost=$${costUsd.toFixed(4)}`);
-
     return {
       content: response.content,
-      internalMeta: {
-        modelUsed: model.id,
-        costUsd,
-        latencyMs: response.latencyMs,
-      },
+      internalMeta: { modelUsed: model.id, costUsd, latencyMs: response.latencyMs },
     };
   } catch (err) {
     logger.error(`❌ Companion chat error: ${err.message}`);
@@ -433,29 +395,21 @@ async function handleCompanionChat({ systemPrompt, messages, user, tier }) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// HEALTH CHECK — Test provider
+// HEALTH CHECK
 // ═══════════════════════════════════════════════════════════
 
 async function checkProviderHealth() {
-  const results = {};
-
   const provider = loadProvider('openai');
   if (provider && provider.checkHealth) {
     try {
-      results.openai = await provider.checkHealth();
+      const health = await provider.checkHealth();
+      return { openai: health };
     } catch (err) {
-      results.openai = { status: 'down', error: err.message };
+      return { openai: { status: 'down', error: err.message } };
     }
-  } else {
-    results.openai = { status: 'not_configured' };
   }
-
-  return results;
+  return { openai: { status: 'not_configured' } };
 }
-
-// ═══════════════════════════════════════════════════════════
-// GET ACTIVE MODEL — for admin dashboard
-// ═══════════════════════════════════════════════════════════
 
 function getActiveModels() {
   return Object.entries(MODEL_REGISTRY).map(([id, m]) => ({
@@ -470,12 +424,8 @@ function getActiveModels() {
 }
 
 function getDefaultModel() {
-  return MODEL_REGISTRY.deepseek_chat;
+  return MODEL_REGISTRY.gemini_flash;
 }
-
-// ═══════════════════════════════════════════════════════════
-// EXPORTS
-// ═══════════════════════════════════════════════════════════
 
 module.exports = {
   handleChat,
