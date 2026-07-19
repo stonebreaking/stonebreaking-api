@@ -14,15 +14,15 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_BASE_URL
-        value: https://generativelanguage.googleapis.com/v1beta/openai/
+        value: https://openrouter.ai/api/v1
       - key: DEFAULT_MODEL
-        value: gemini-2.0-flash
+        value: meta-llama/llama-4-maverick:free
       - key: CHEAP_MODEL
-        value: gemini-2.0-flash
+        value: meta-llama/llama-4-maverick:free
       - key: PREMIUM_MODEL
-        value: gemini-2.5-flash
+        value: qwen/qwen3-235b-a22b:free
       - key: COMPANION_MODEL
-        value: gemini-2.0-flash
+        value: meta-llama/llama-4-maverick:free
       - key: JWT_SECRET
         generateValue: true
       - key: DAILY_SPEND_CAP_USD

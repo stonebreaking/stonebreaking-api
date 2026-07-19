@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
-// StoneBreaking — AI Model Router (THE CORE BRAIN) v2.1
+// StoneBreaking — AI Model Router v2.2 (OpenRouter)
 // ═══════════════════════════════════════════════════════════
-// Gemini-powered router with smart model selection.
+// OpenRouter-powered router with free + premium models.
 // Users NEVER see which model is used. StoneBreaking IS the AI.
 // ═══════════════════════════════════════════════════════════
 
@@ -9,40 +9,39 @@ const logger = require('../utils/logger');
 const costGuard = require('./costGuard');
 const tokenEstimator = require('./tokenEstimator');
 
-// Provider instances (lazy-loaded)
 let openaiProvider = null;
 
 // ═══════════════════════════════════════════════════════════
-// MODEL REGISTRY — Google Gemini via OpenAI-compatible API
+// MODEL REGISTRY — OpenRouter Free + Premium
 // ═══════════════════════════════════════════════════════════
 
 const MODEL_REGISTRY = {
-  gemini_flash: {
-    id: 'gemini_flash',
+  free_chat: {
+    id: 'free_chat',
     provider: 'openai',
-    apiModel: process.env.CHEAP_MODEL || 'gemini-2.0-flash',
-    costIn: 0.075,     // $/1M input tokens (free tier)
-    costOut: 0.30,     // $/1M output tokens (free tier)
-    quality: 90,
-    maxContext: 1048576,
+    apiModel: process.env.CHEAP_MODEL || 'meta-llama/llama-4-maverick:free',
+    costIn: 0,
+    costOut: 0,
+    quality: 85,
+    maxContext: 128000,
     tierMin: 'breaker',
-    supports: ['text', 'code', 'reasoning', 'math', 'creative'],
-    latencyMs: 1500,
+    supports: ['text', 'code', 'reasoning', 'creative'],
+    latencyMs: 2000,
     failover: null,
     isDefault: true,
   },
-  gemini_pro: {
-    id: 'gemini_pro',
+  quality_chat: {
+    id: 'quality_chat',
     provider: 'openai',
-    apiModel: process.env.PREMIUM_MODEL || 'gemini-2.5-flash',
-    costIn: 0.15,
-    costOut: 0.60,
-    quality: 95,
-    maxContext: 1048576,
+    apiModel: process.env.PREMIUM_MODEL || 'qwen/qwen3-235b-a22b:free',
+    costIn: 0,
+    costOut: 0,
+    quality: 92,
+    maxContext: 128000,
     tierMin: 'shatter',
     supports: ['text', 'code', 'reasoning', 'math', 'agent'],
-    latencyMs: 3000,
-    failover: 'gemini_flash',
+    latencyMs: 3500,
+    failover: 'free_chat',
   },
 };
 
@@ -63,8 +62,6 @@ function loadProvider(providerName) {
     }
     return openaiProvider;
   }
-
-  logger.warn(`Unknown provider: ${providerName}`);
   return null;
 }
 
@@ -131,28 +128,23 @@ function selectModel(classification, userTier, platformSpendPct) {
   const tierOrder = { breaker: 0, shatter: 1, obliterate: 2 };
   const userLevel = tierOrder[userTier] ?? 0;
 
-  // Emergency: Platform spend > 90%
   if (platformSpendPct > 90) {
-    logger.warn(`🚨 EMERGENCY: Platform spend at ${platformSpendPct}%`);
-    return MODEL_REGISTRY.gemini_flash;
+    return MODEL_REGISTRY.free_chat;
   }
 
-  // Auto-downgrade at 80% spend
   if (platformSpendPct > 80) {
-    logger.warn(`⚠️  Platform spend at ${platformSpendPct}%`);
-    return MODEL_REGISTRY.gemini_flash;
+    return MODEL_REGISTRY.free_chat;
   }
 
-  // Complex code/math/reasoning/agent + high tier → pro model
+  // Complex + high tier → quality model
   if (complexity === 'complex' && (type === 'code' || type === 'math' || type === 'reasoning' || type === 'agent')) {
     if (userLevel >= 1) {
-      return MODEL_REGISTRY.gemini_pro;
+      return MODEL_REGISTRY.quality_chat;
     }
-    return MODEL_REGISTRY.gemini_flash;
+    return MODEL_REGISTRY.free_chat;
   }
 
-  // Default: cost-optimized
-  return MODEL_REGISTRY.gemini_flash;
+  return MODEL_REGISTRY.free_chat;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -167,24 +159,13 @@ async function handleChat({ message, history, user, platformSpendPct, systemProm
 
   const tierOrder = { breaker: 0, shatter: 1, obliterate: 2 };
   if ((tierOrder[user.tier] ?? 0) < (tierOrder[model.tierMin] ?? 0)) {
-    model = MODEL_REGISTRY.gemini_flash;
+    model = MODEL_REGISTRY.free_chat;
   }
 
   const inputTokens = tokenEstimator.estimateTokens(message, { language: 'mixed' });
   const historyTokens = tokenEstimator.estimateTokensFromMessages(history);
   const totalInputTokens = inputTokens + historyTokens;
   const estimatedOutputTokens = classification.complexity === 'complex' ? 1500 : 1000;
-  const estimatedCost = tokenEstimator.calculateCost(totalInputTokens, estimatedOutputTokens, model);
-
-  const costCheck = costGuard.canAfford(estimatedCost);
-  if (!costCheck.allowed) {
-    model = MODEL_REGISTRY.gemini_flash;
-  }
-
-  const maxPerRequest = parseFloat(process.env.MAX_PER_REQUEST_COST_USD) || 0.10;
-  if (estimatedCost > maxPerRequest) {
-    throw new Error('Mesajınız çok uzun. Lütfen kısaltın.');
-  }
 
   const provider = loadProvider(model.provider);
   if (!provider) {
@@ -267,24 +248,7 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
 
   const tierOrder = { breaker: 0, shatter: 1, obliterate: 2 };
   if ((tierOrder[user.tier] ?? 0) < (tierOrder[model.tierMin] ?? 0)) {
-    model = MODEL_REGISTRY.gemini_flash;
-  }
-
-  const inputTokens = tokenEstimator.estimateTokens(message, { language: 'mixed' });
-  const historyTokens = tokenEstimator.estimateTokensFromMessages(history);
-  const totalInputTokens = inputTokens + historyTokens;
-  const estimatedCost = tokenEstimator.calculateCost(totalInputTokens, 1000, model);
-
-  const costCheck = costGuard.canAfford(estimatedCost);
-  if (!costCheck.allowed) {
-    model = MODEL_REGISTRY.gemini_flash;
-  }
-
-  const maxPerRequest = parseFloat(process.env.MAX_PER_REQUEST_COST_USD) || 0.10;
-  if (estimatedCost > maxPerRequest) {
-    onChunk('\n\n[Mesajınız çok uzun. Lütfen kısaltın.]');
-    onDone({ internalMeta: { modelUsed: 'none', costUsd: 0, latencyMs: 0, tokensOut: 0 } });
-    return;
+    model = MODEL_REGISTRY.free_chat;
   }
 
   const provider = loadProvider(model.provider);
@@ -308,13 +272,13 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
       onChunk(chunk);
     }, (meta) => {
       const latencyMs = Date.now() - startTime;
-      const actualInputTokens = meta.usage?.prompt_tokens || totalInputTokens;
-      const actualOutputTokens = meta.usage?.completion_tokens || Math.ceil(fullContent.length / 3.5);
-      const actualCost = tokenEstimator.calculateCost(actualInputTokens, actualOutputTokens, model);
+      const inputTokens = meta.usage?.prompt_tokens || tokenEstimator.estimateTokens(message, { language: 'mixed' });
+      const outputTokens = meta.usage?.completion_tokens || Math.ceil(fullContent.length / 3.5);
+      const actualCost = tokenEstimator.calculateCost(inputTokens, outputTokens, model);
 
       costGuard.recordSpend(actualCost, model.id);
 
-      logger.info(`✅ Stream: model=${model.id} tokens=${actualInputTokens}+${actualOutputTokens} cost=$${actualCost.toFixed(4)} latency=${latencyMs}ms`);
+      logger.info(`✅ Stream: model=${model.id} tokens=${inputTokens}+${outputTokens} cost=$${actualCost.toFixed(4)} latency=${latencyMs}ms`);
 
       onDone({
         internalMeta: {
@@ -323,8 +287,8 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
           classification,
           costUsd: actualCost,
           latencyMs,
-          tokensIn: actualInputTokens,
-          tokensOut: actualOutputTokens,
+          tokensIn: inputTokens,
+          tokensOut: outputTokens,
         },
       });
     }, (err) => {
@@ -363,11 +327,9 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
 // ═══════════════════════════════════════════════════════════
 
 async function handleCompanionChat({ systemPrompt, messages, user, tier }) {
-  const model = MODEL_REGISTRY.gemini_flash;
+  const model = MODEL_REGISTRY.free_chat;
   const provider = loadProvider(model.provider);
-  if (!provider) {
-    throw new Error('Companion servisi geçici olarak kullanılamıyor.');
-  }
+  if (!provider) throw new Error('Companion servisi geçici olarak kullanılamıyor.');
 
   try {
     const response = await provider.chat({
@@ -413,28 +375,18 @@ async function checkProviderHealth() {
 
 function getActiveModels() {
   return Object.entries(MODEL_REGISTRY).map(([id, m]) => ({
-    id: m.id,
-    provider: m.provider,
-    quality: m.quality,
-    costInPerM: m.costIn,
-    costOutPerM: m.costOut,
-    tierMin: m.tierMin,
-    isDefault: m.isDefault || false,
+    id: m.id, provider: m.provider, quality: m.quality,
+    costInPerM: m.costIn, costOutPerM: m.costOut,
+    tierMin: m.tierMin, isDefault: m.isDefault || false,
   }));
 }
 
 function getDefaultModel() {
-  return MODEL_REGISTRY.gemini_flash;
+  return MODEL_REGISTRY.free_chat;
 }
 
 module.exports = {
-  handleChat,
-  handleChatStream,
-  handleCompanionChat,
-  classifyQuery,
-  selectModel,
-  checkProviderHealth,
-  getActiveModels,
-  getDefaultModel,
-  MODEL_REGISTRY,
+  handleChat, handleChatStream, handleCompanionChat,
+  classifyQuery, selectModel, checkProviderHealth,
+  getActiveModels, getDefaultModel, MODEL_REGISTRY,
 };
