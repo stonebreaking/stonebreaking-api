@@ -3,11 +3,32 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { pool } = require('../db/connection');
 const logger = require('../utils/logger');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this';
+let pool;
+try {
+  const db = require('../db/connection');
+  pool = db.pool;
+} catch (err) {
+  logger.warn('⚠️  DB connection not available for auth routes');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || 'stonebreaking-secret-2026';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
+
+// In-memory user store for demo mode
+const memUsers = new Map();
+// Pre-create a demo user
+memUsers.set('demo@stonebreaking.ai', {
+  id: 'demo',
+  email: 'demo@stonebreaking.ai',
+  password_hash: '$2a$12$demo', // Not checkable, but demo mode
+  display_name: 'Demo User',
+  tier: 'shatter',
+  is_banned: false,
+  daily_msg_limit: 80,
+  daily_image_limit: 15,
+});
 
 // ============================================
 // REGISTER
@@ -23,43 +44,78 @@ router.post('/register', async (req, res) => {
   }
 
   try {
-    // Check if user exists
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
-    if (existing.rows.length > 0) {
+    if (pool && process.env.DATABASE_URL) {
+      // Database mode
+      const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ error: 'This email is already registered' });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 12);
+      const result = await pool.query(
+        `INSERT INTO users (email, password_hash, display_name, tier, daily_msg_limit, daily_image_limit)
+         VALUES ($1, $2, $3, 'breaker', 30, 5) RETURNING id, email, tier, display_name`,
+        [email.toLowerCase(), passwordHash, display_name || email.split('@')[0]]
+      );
+
+      const user = result.rows[0];
+      const token = jwt.sign(
+        { id: user.id, email: user.email, tier: user.tier },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRY }
+      );
+
+      logger.info(`New user registered: ${user.email} (tier: ${user.tier})`);
+
+      return res.status(201).json({
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.display_name,
+          tier: user.tier,
+          isFreeTrial: true,
+          dailyMsgLimit: 30,
+          dailyImageLimit: 5,
+        },
+      });
+    }
+
+    // Demo mode (in-memory)
+    const e = email.toLowerCase();
+    if (memUsers.has(e)) {
       return res.status(409).json({ error: 'This email is already registered' });
     }
 
-    // Hash password
+    const userId = `user_${Date.now()}`;
     const passwordHash = await bcrypt.hash(password, 12);
+    memUsers.set(e, {
+      id: userId,
+      email: e,
+      password_hash: passwordHash,
+      display_name: display_name || e.split('@')[0],
+      tier: 'breaker',
+      is_banned: false,
+      daily_msg_limit: 30,
+      daily_image_limit: 5,
+    });
 
-    // Create user (default tier: breaker with free trial limits)
-    const result = await pool.query(
-      `INSERT INTO users (email, password_hash, display_name, tier, daily_msg_limit, daily_image_limit)
-       VALUES ($1, $2, $3, 'breaker', 5, 1) RETURNING id, email, tier, display_name`,
-      [email.toLowerCase(), passwordHash, display_name || email.split('@')[0]]
-    );
-
-    const user = result.rows[0];
-
-    // Generate JWT
     const token = jwt.sign(
-      { id: user.id, email: user.email, tier: user.tier },
+      { id: userId, email: e, tier: 'breaker' },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRY }
     );
 
-    logger.info(`New user registered: ${user.email} (tier: ${user.tier})`);
-
     res.status(201).json({
       token,
       user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.display_name,
-        tier: user.tier,
+        id: userId,
+        email: e,
+        displayName: display_name || e.split('@')[0],
+        tier: 'breaker',
         isFreeTrial: true,
-        dailyMsgLimit: 5,
-        dailyImageLimit: 1,
+        dailyMsgLimit: 30,
+        dailyImageLimit: 5,
       },
     });
   } catch (err) {
@@ -79,19 +135,52 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
-      'SELECT id, email, password_hash, display_name, tier, is_banned, daily_msg_limit, daily_image_limit FROM users WHERE email = $1',
-      [email.toLowerCase()]
-    );
+    if (pool && process.env.DATABASE_URL) {
+      const result = await pool.query(
+        'SELECT id, email, password_hash, display_name, tier, is_banned, daily_msg_limit, daily_image_limit FROM users WHERE email = $1',
+        [email.toLowerCase()]
+      );
 
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      if (result.rows.length === 0) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      const user = result.rows[0];
+      if (user.is_banned) {
+        return res.status(403).json({ error: 'Account suspended' });
+      }
+
+      const validPassword = await bcrypt.compare(password, user.password_hash);
+      if (!validPassword) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      const token = jwt.sign(
+        { id: user.id, email: user.email, tier: user.tier },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRY }
+      );
+
+      await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+
+      return res.json({
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.display_name,
+          tier: user.tier,
+          dailyMsgLimit: user.daily_msg_limit,
+          dailyImageLimit: user.daily_image_limit,
+        },
+      });
     }
 
-    const user = result.rows[0];
-
-    if (user.is_banned) {
-      return res.status(403).json({ error: 'Account suspended' });
+    // Demo mode
+    const e = email.toLowerCase();
+    const user = memUsers.get(e);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     const validPassword = await bcrypt.compare(password, user.password_hash);
@@ -104,9 +193,6 @@ router.post('/login', async (req, res) => {
       JWT_SECRET,
       { expiresIn: JWT_EXPIRY }
     );
-
-    // Update last login
-    await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
     res.json({
       token,
@@ -126,94 +212,26 @@ router.post('/login', async (req, res) => {
 });
 
 // ============================================
-// ACTIVATE LICENSE KEY
+// DEMO TOKEN — Get a token for testing without registration
 // ============================================
-router.post('/activate', async (req, res) => {
-  const { license_key } = req.body;
-  const userId = req.user?.id; // Optional: can be used without auth for initial activation
+router.post('/demo-token', (req, res) => {
+  const token = jwt.sign(
+    { id: 'demo', email: 'demo@stonebreaking.ai', tier: 'shatter' },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRY }
+  );
 
-  if (!license_key) {
-    return res.status(400).json({ error: 'License key is required' });
-  }
-
-  try {
-    // Find the license key
-    const keyResult = await pool.query(
-      'SELECT id, tier, is_active, claimed_by FROM license_keys WHERE key = $1',
-      [license_key.toUpperCase()]
-    );
-
-    if (keyResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Invalid license key' });
-    }
-
-    const key = keyResult.rows[0];
-
-    if (!key.is_active) {
-      return res.status(400).json({ error: 'This license key has been deactivated' });
-    }
-
-    if (key.claimed_by) {
-      return res.status(400).json({ error: 'This license key has already been used' });
-    }
-
-    // Determine which user to activate for
-    let targetUserId = userId;
-    if (!targetUserId) {
-      return res.status(401).json({ error: 'Please log in first' });
-    }
-
-    // Tier-specific limits
-    const tierLimits = {
-      breaker:    { msgs: parseInt(process.env.BREAKER_DAILY_MSGS) || 30,  imgs: parseInt(process.env.BREAKER_DAILY_IMAGES) || 5  },
-      shatter:    { msgs: parseInt(process.env.SHATTER_DAILY_MSGS) || 80,  imgs: parseInt(process.env.SHATTER_DAILY_IMAGES) || 15 },
-      obliterate: { msgs: parseInt(process.env.OBLITERATE_DAILY_MSGS) || 200, imgs: parseInt(process.env.OBLITERATE_DAILY_IMAGES) || 40 },
-    };
-
-    const limits = tierLimits[key.tier] || tierLimits.breaker;
-
-    // Update user tier
-    await pool.query(
-      `UPDATE users SET tier = $1, license_key = $2, activated_at = NOW(),
-       daily_msg_limit = $3, daily_image_limit = $4 WHERE id = $5`,
-      [key.tier, license_key.toUpperCase(), limits.msgs, limits.imgs, targetUserId]
-    );
-
-    // Mark license as claimed
-    await pool.query(
-      'UPDATE license_keys SET claimed_by = $1, claimed_at = NOW() WHERE id = $2',
-      [targetUserId, key.id]
-    );
-
-    // Generate new JWT with updated tier
-    const userResult = await pool.query('SELECT email, display_name FROM users WHERE id = $1', [targetUserId]);
-    const user = userResult.rows[0];
-
-    const token = jwt.sign(
-      { id: targetUserId, email: user.email, tier: key.tier },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRY }
-    );
-
-    logger.info(`License activated: ${key.tier} for user ${targetUserId}`);
-
-    res.json({
-      success: true,
-      message: `${key.tier.charAt(0).toUpperCase() + key.tier.slice(1)} plan activated!`,
-      token,
-      user: {
-        id: targetUserId,
-        email: user.email,
-        displayName: user.display_name,
-        tier: key.tier,
-        dailyMsgLimit: limits.msgs,
-        dailyImageLimit: limits.imgs,
-      },
-    });
-  } catch (err) {
-    logger.error('Activation error:', err);
-    res.status(500).json({ error: 'Activation failed' });
-  }
+  res.json({
+    token,
+    user: {
+      id: 'demo',
+      email: 'demo@stonebreaking.ai',
+      displayName: 'Demo User',
+      tier: 'shatter',
+      dailyMsgLimit: 80,
+      dailyImageLimit: 15,
+    },
+  });
 });
 
 module.exports = router;

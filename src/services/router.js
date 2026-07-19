@@ -15,25 +15,16 @@ const tokenEstimator = require('./tokenEstimator');
 
 // Provider instances (lazy-loaded)
 let openaiProvider = null;
-let deepseekProvider = null;
-let kimiProvider = null;
-let anthropicProvider = null;
-let googleProvider = null;
 
 // ═══════════════════════════════════════════════════════════
 // MODEL REGISTRY — DeepSeek as primary (cheapest + best)
 // ═══════════════════════════════════════════════════════════
-// When OPENAI_BASE_URL points to DeepSeek, the openai provider
-// automatically uses DeepSeek's API. All models below route
-// through the same OpenAI-compatible endpoint.
-// ═══════════════════════════════════════════════════════════
 
 const MODEL_REGISTRY = {
-  // ── PRIMARY: DeepSeek (via OpenAI-compatible API) ──────
   deepseek_chat: {
     id: 'deepseek_chat',
     provider: 'openai',
-    apiModel: process.env.DEFAULT_MODEL || 'deepseek-chat',
+    apiModel: process.env.CHEAP_MODEL || 'deepseek-chat',
     costIn: 0.27,     // $/1M input tokens
     costOut: 1.10,    // $/1M output tokens
     quality: 91,
@@ -41,13 +32,13 @@ const MODEL_REGISTRY = {
     tierMin: 'breaker',
     supports: ['text', 'code', 'reasoning', 'math'],
     latencyMs: 2000,
-    failover: 'deepseek_chat',
+    failover: null,
     isDefault: true,
   },
   deepseek_reasoner: {
     id: 'deepseek_reasoner',
     provider: 'openai',
-    apiModel: 'deepseek-reasoner',
+    apiModel: process.env.PREMIUM_MODEL || 'deepseek-reasoner',
     costIn: 0.55,
     costOut: 2.19,
     quality: 96,
@@ -64,71 +55,21 @@ const MODEL_REGISTRY = {
 // ═══════════════════════════════════════════════════════════
 
 function loadProvider(providerName) {
-  switch (providerName) {
-    case 'openai':
-      if (!openaiProvider) {
-        try {
-          openaiProvider = require('../providers/openaiProvider');
-          logger.info('✅ OpenAI provider loaded');
-        } catch (err) {
-          logger.error(`❌ Failed to load OpenAI provider: ${err.message}`);
-          return null;
-        }
+  if (providerName === 'openai') {
+    if (!openaiProvider) {
+      try {
+        openaiProvider = require('../providers/openaiProvider');
+        logger.info('✅ OpenAI provider loaded');
+      } catch (err) {
+        logger.error(`❌ Failed to load OpenAI provider: ${err.message}`);
+        return null;
       }
-      return openaiProvider;
-
-    case 'deepseek':
-      if (!deepseekProvider) {
-        try {
-          deepseekProvider = require('../providers/deepseek');
-          logger.info('✅ DeepSeek provider loaded');
-        } catch (err) {
-          logger.error(`❌ Failed to load DeepSeek provider: ${err.message}`);
-          return null;
-        }
-      }
-      return deepseekProvider;
-
-    case 'kimi':
-      if (!kimiProvider) {
-        try {
-          kimiProvider = require('../providers/kimi');
-          logger.info('✅ Kimi provider loaded');
-        } catch (err) {
-          logger.error(`❌ Failed to load Kimi provider: ${err.message}`);
-          return null;
-        }
-      }
-      return kimiProvider;
-
-    case 'anthropic':
-      if (!anthropicProvider) {
-        try {
-          anthropicProvider = require('../providers/anthropic');
-          logger.info('✅ Anthropic provider loaded');
-        } catch (err) {
-          logger.error(`❌ Failed to load Anthropic provider: ${err.message}`);
-          return null;
-        }
-      }
-      return anthropicProvider;
-
-    case 'google':
-      if (!googleProvider) {
-        try {
-          googleProvider = require('../providers/google');
-          logger.info('✅ Google provider loaded');
-        } catch (err) {
-          logger.error(`❌ Failed to load Google provider: ${err.message}`);
-          return null;
-        }
-      }
-      return googleProvider;
-
-    default:
-      logger.error(`Unknown provider: ${providerName}`);
-      return null;
+    }
+    return openaiProvider;
   }
+
+  logger.warn(`Unknown provider: ${providerName}`);
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -167,7 +108,6 @@ function classifyQuery(message, history = []) {
   ]);
 
   const scores = { code: codeScore, math: mathScore, reasoning: reasonScore, simple: simpleScore, creative: creativeScore, agent: agentScore };
-  // Priority boost: code > math > agent > reasoning > creative > simple
   const typePriority = { code: 6, math: 5, agent: 4, reasoning: 3, creative: 2, simple: 1 };
   const sorted = Object.entries(scores).sort((a, b) => {
     if (b[1] !== a[1]) return b[1] - a[1];
@@ -198,56 +138,25 @@ function selectModel(classification, userTier, platformSpendPct) {
   // ── Emergency: Platform spend > 90% ──────────────────
   if (platformSpendPct > 90) {
     logger.warn(`🚨 EMERGENCY: Platform spend at ${platformSpendPct}% — forcing cheapest model`);
-    return MODEL_REGISTRY.deepseek_v4_flash || MODEL_REGISTRY.gpt4o_mini;
+    return MODEL_REGISTRY.deepseek_chat;
   }
 
   // ── Auto-downgrade at 80% spend ──────────────────────
   if (platformSpendPct > 80) {
     logger.warn(`⚠️  Platform spend at ${platformSpendPct}% — cost optimization active`);
-    return MODEL_REGISTRY.gpt4o_mini;
+    return MODEL_REGISTRY.deepseek_chat;
   }
 
-  // ── Simple queries → cheapest capable model ───────────
-  if (type === 'simple' && complexity === 'simple') {
-    return MODEL_REGISTRY.gpt4o_mini;
-  }
-
-  // ── Code routing ──────────────────────────────────────
-  if (type === 'code') {
-    if (complexity === 'complex' && userLevel >= 1) {
-      return MODEL_REGISTRY.gpt4o;  // Shatter+
+  // ── Complex code/math/reasoning/agent + high tier → reasoner ──
+  if (complexity === 'complex' && (type === 'code' || type === 'math' || type === 'reasoning' || type === 'agent')) {
+    if (userLevel >= 1) {
+      return MODEL_REGISTRY.deepseek_reasoner;
     }
-    return MODEL_REGISTRY.gpt4o_mini;
-  }
-
-  // ── Math routing ──────────────────────────────────────
-  if (type === 'math' && complexity === 'complex') {
-    if (userLevel >= 2) return MODEL_REGISTRY.gpt4o_pro;
-    if (userLevel >= 1) return MODEL_REGISTRY.gpt4o;
-    return MODEL_REGISTRY.gpt4o_mini;
-  }
-
-  // ── Reasoning routing ────────────────────────────────
-  if (type === 'reasoning' && complexity === 'complex') {
-    if (userLevel >= 2) return MODEL_REGISTRY.claude_opus47;
-    if (userLevel >= 1) return MODEL_REGISTRY.gpt4o;
-    return MODEL_REGISTRY.gpt4o_mini;
-  }
-
-  // ── Agent routing ────────────────────────────────────
-  if (type === 'agent') {
-    if (userLevel >= 2) return MODEL_REGISTRY.claude_opus47;
-    if (userLevel >= 1) return MODEL_REGISTRY.gpt4o;
-    return MODEL_REGISTRY.gpt4o_mini;
-  }
-
-  // ── Creative routing ─────────────────────────────────
-  if (type === 'creative') {
-    return MODEL_REGISTRY.gpt4o_mini;  // Mini is great for creative writing
+    return MODEL_REGISTRY.deepseek_chat;
   }
 
   // ── Default: cost-optimized quality ───────────────────
-  return MODEL_REGISTRY.gpt4o_mini;
+  return MODEL_REGISTRY.deepseek_chat;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -266,7 +175,7 @@ async function handleChat({ message, history, user, platformSpendPct, systemProm
   const tierOrder = { breaker: 0, shatter: 1, obliterate: 2 };
   if ((tierOrder[user.tier] ?? 0) < (tierOrder[model.tierMin] ?? 0)) {
     logger.info(`🔒 User tier ${user.tier} can't access ${model.id}, downgrading`);
-    model = MODEL_REGISTRY.gpt4o_mini;
+    model = MODEL_REGISTRY.deepseek_chat;
   }
 
   // 4. Estimate tokens and cost
@@ -276,42 +185,29 @@ async function handleChat({ message, history, user, platformSpendPct, systemProm
   const estimatedOutputTokens = classification.complexity === 'complex' ? 1200 : 800;
   const estimatedCost = tokenEstimator.calculateCost(totalInputTokens, estimatedOutputTokens, model);
 
-  // 5. Token limit validation
-  const tokenCheck = tokenEstimator.validateTokenLimit(totalInputTokens, user.tier, model.maxContext);
-  if (!tokenCheck.allowed) {
-    throw new Error(`Mesajınız çok uzun. ${tokenCheck.overBy} token fazla. Lütfen kısaltın.`);
-  }
-
-  // 6. Pre-request cost guard
+  // 5. Cost check
   const costCheck = costGuard.canAfford(estimatedCost);
   if (!costCheck.allowed) {
-    logger.warn(`💰 Cost guard blocked: ${costCheck.reason}`);
-    // Try cheapest model
-    const cheapModel = MODEL_REGISTRY.gpt4o_mini;
-    const cheapCost = tokenEstimator.calculateCost(totalInputTokens, 500, cheapModel);
-    const cheapCheck = costGuard.canAfford(cheapCost);
-    if (!cheapCheck.allowed) {
-      throw new Error('Şu anda sistem kapasiteye ulaştı. Lütfen biraz sonra tekrar deneyin.');
-    }
-    model = cheapModel;
+    logger.warn(`🚫 Cost guard blocked request: ${costCheck.reason}`);
+    model = MODEL_REGISTRY.deepseek_chat;
   }
 
-  // 7. Per-request cost limit
+  // 6. Per-request cost limit
   const maxPerRequest = parseFloat(process.env.MAX_PER_REQUEST_COST_USD) || 0.05;
   if (estimatedCost > maxPerRequest) {
-    logger.warn(`💸 Request cost $${estimatedCost.toFixed(4)} exceeds limit $${maxPerRequest}`);
     throw new Error('Mesajınız çok uzun. Lütfen kısaltın.');
   }
 
-  // 8. Call the model with retry + failover
+  // 7. Load provider
   const provider = loadProvider(model.provider);
   if (!provider) {
-    throw new Error('AI servisi şu anda kullanılamıyor. Lütfen biraz sonra deneyin.');
+    throw new Error('AI servisi geçici olarak kullanılamıyor.');
   }
 
-  let response;
+  // 8. Call AI with retry + failover
+  const MAX_RETRIES = 1;
   let retries = 0;
-  const MAX_RETRIES = 2;
+  let response;
 
   while (retries <= MAX_RETRIES) {
     try {
@@ -326,7 +222,6 @@ async function handleChat({ message, history, user, platformSpendPct, systemProm
       retries++;
       logger.error(`❌ Model ${model.id} failed (attempt ${retries}/${MAX_RETRIES + 1}): ${err.message}`);
 
-      // If out of retries, try failover
       if (retries > MAX_RETRIES) {
         if (model.failover && MODEL_REGISTRY[model.failover]) {
           logger.info(`🔄 Failing over to ${model.failover}`);
@@ -346,7 +241,6 @@ async function handleChat({ message, history, user, platformSpendPct, systemProm
             }
           }
         }
-        // All providers failed
         if (err.code === 'rate_limit') {
           throw new Error('Şu anda çok yoğun talep var. Biraz bekleyip tekrar deneyin.');
         }
@@ -399,7 +293,7 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
   // Tier check
   const tierOrder = { breaker: 0, shatter: 1, obliterate: 2 };
   if ((tierOrder[user.tier] ?? 0) < (tierOrder[model.tierMin] ?? 0)) {
-    model = MODEL_REGISTRY.gpt4o_mini;
+    model = MODEL_REGISTRY.deepseek_chat;
   }
 
   // Cost check
@@ -410,14 +304,14 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
 
   const costCheck = costGuard.canAfford(estimatedCost);
   if (!costCheck.allowed) {
-    model = MODEL_REGISTRY.gpt4o_mini;
+    model = MODEL_REGISTRY.deepseek_chat;
   }
 
   // Per-request cost limit
   const maxPerRequest = parseFloat(process.env.MAX_PER_REQUEST_COST_USD) || 0.05;
   if (estimatedCost > maxPerRequest) {
     onChunk('\n\n[Mesajınız çok uzun. Lütfen kısaltın.]');
-    onDone({ internalMeta: { modelUsed: 'none', costUsd: 0, latencyMs: 0 } });
+    onDone({ internalMeta: { modelUsed: 'none', costUsd: 0, latencyMs: 0, tokensOut: 0 } });
     return;
   }
 
@@ -425,7 +319,7 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
   const provider = loadProvider(model.provider);
   if (!provider) {
     onChunk('\n\n[AI servisi şu anda kullanılamıyor.]');
-    onDone({ internalMeta: { modelUsed: 'none', costUsd: 0, latencyMs: 0 } });
+    onDone({ internalMeta: { modelUsed: 'none', costUsd: 0, latencyMs: 0, tokensOut: 0 } });
     return;
   }
 
@@ -477,20 +371,20 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
             systemPrompt: systemPrompt || null,
           }, onChunk, onDone).catch(() => {
             onChunk('\n\n[Bağlantı hatası. Lütfen tekrar deneyin.]');
-            onDone({ internalMeta: { modelUsed: failModel.id, costUsd: 0, latencyMs: Date.now() - startTime } });
+            onDone({ internalMeta: { modelUsed: failModel.id, costUsd: 0, latencyMs: Date.now() - startTime, tokensOut: 0 } });
           });
           return;
         }
       }
 
       onChunk('\n\n[Bağlantı hatası. Lütfen tekrar deneyin.]');
-      onDone({ internalMeta: { modelUsed: model.id, costUsd: 0, latencyMs: Date.now() - startTime } });
+      onDone({ internalMeta: { modelUsed: model.id, costUsd: 0, latencyMs: Date.now() - startTime, tokensOut: 0 } });
     });
 
   } catch (err) {
     logger.error(`❌ Stream failed: ${err.message}`);
     onChunk('\n\n[Bağlantı hatası. Lütfen tekrar deneyin.]');
-    onDone({ internalMeta: { modelUsed: model.id, costUsd: 0, latencyMs: Date.now() - startTime } });
+    onDone({ internalMeta: { modelUsed: model.id, costUsd: 0, latencyMs: Date.now() - startTime, tokensOut: 0 } });
   }
 }
 
@@ -500,12 +394,7 @@ async function handleChatStream({ message, history, user, platformSpendPct, syst
 
 async function handleCompanionChat({ systemPrompt, messages, user, tier }) {
   // Companion always uses cost-effective model
-  let model = MODEL_REGISTRY.gpt4o_mini;
-
-  // Elite Pro companions can use better model
-  if (tier === 'elite_pro') {
-    model = MODEL_REGISTRY.gpt4o;
-  }
+  let model = MODEL_REGISTRY.deepseek_chat;
 
   const provider = loadProvider(model.provider);
   if (!provider) {
@@ -517,7 +406,7 @@ async function handleCompanionChat({ systemPrompt, messages, user, tier }) {
       model: model.apiModel || model.id,
       messages,
       maxTokens: 600,
-      temperature: 0.8,  // More creative for companion
+      temperature: 0.8,
       systemPrompt,
     });
 
@@ -544,25 +433,21 @@ async function handleCompanionChat({ systemPrompt, messages, user, tier }) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// HEALTH CHECK — Test all providers
+// HEALTH CHECK — Test provider
 // ═══════════════════════════════════════════════════════════
 
 async function checkProviderHealth() {
   const results = {};
 
-  for (const [id, model] of Object.entries(MODEL_REGISTRY)) {
-    const provider = loadProvider(model.provider);
-    if (provider && provider.checkHealth) {
-      try {
-        results[model.provider] = await provider.checkHealth();
-      } catch (err) {
-        results[model.provider] = { status: 'down', error: err.message };
-      }
-    } else if (provider) {
-      results[model.provider] = { status: 'unknown' };
-    } else {
-      results[model.provider] = { status: 'not_configured' };
+  const provider = loadProvider('openai');
+  if (provider && provider.checkHealth) {
+    try {
+      results.openai = await provider.checkHealth();
+    } catch (err) {
+      results.openai = { status: 'down', error: err.message };
     }
+  } else {
+    results.openai = { status: 'not_configured' };
   }
 
   return results;
@@ -585,7 +470,7 @@ function getActiveModels() {
 }
 
 function getDefaultModel() {
-  return MODEL_REGISTRY[process.env.DEFAULT_MODEL || 'gpt4o_mini'] || MODEL_REGISTRY.gpt4o_mini;
+  return MODEL_REGISTRY.deepseek_chat;
 }
 
 // ═══════════════════════════════════════════════════════════
